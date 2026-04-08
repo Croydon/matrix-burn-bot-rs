@@ -21,12 +21,8 @@ use futures_util::{StreamExt, pin_mut};
 /// The data needed to re-build a client.
 #[derive(Debug, Serialize, Deserialize)]
 struct ClientSession {
-    /// The URL of the homeserver of the user.
     homeserver: String,
-
-    /// The path of the database.
     db_path: PathBuf,
-
     /// The passphrase of the database.
     passphrase: String,
 }
@@ -347,5 +343,10 @@ async fn on_room_message(event: OriginalSyncRoomMessageEvent, room: Room) {
         }
     };
 
+    let ts = event.origin_server_ts; // ruma::Timestamp (ms since unix epoch)
+    let system_time = ts.to_system_time(); // std::time::SystemTime
+
+    println!("event time: {:?}", system_time);
     println!("[{} {room_name}] {}: {}", room.room_id().to_string(), event.sender, text_content.body)
+
 }
