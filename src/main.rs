@@ -52,27 +52,12 @@ struct FullSession {
     secret_store_key: String,
 }
 
-/// A simple example to show how to persist a client's data to be able to
-/// restore it.
-///
-/// Restoring a session with encryption without having a persisted store
-/// will break the encryption setup and the client will not be able to send or
-/// receive encrypted messages, hence the need to persist the session.
-///
-/// To use this, just run `cargo run -p example-persist-session`, and everything
-/// is interactive after that. You might want to set the `RUST_LOG` environment
-/// variable to `warn` to reduce the noise in the logs. The program exits
-/// whenever an unexpected error occurs.
-///
-/// To reset the login, simply delete the folder containing the session
-/// file, the location is shown in the logs. Note that the database must be
-/// deleted too as it can't be reused.
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     let data_dir = std::env::var_os("PWD").map(PathBuf::from).expect("can't read the current working directory").join("matrix-burn-bot-rs-appdata");
-    let session_file = data_dir.join("session");
+    let session_file = data_dir.join("config.toml");
 
     let (client, secret_store_key, sync_token) = if session_file.exists() {
         restore_session(&session_file).await?
@@ -97,10 +82,9 @@ async fn main() -> anyhow::Result<()> {
 async fn restore_session(session_file: &Path) -> anyhow::Result<(Client, String, Option<String>)> {
     println!("Previous session found in '{}'", session_file.to_string_lossy());
 
-    // The session was serialized as JSON in a file.
+    // The session was serialized as TOML in a file.
     let serialized_session = fs::read_to_string(session_file).await?;
-    let FullSession { client_session, user_session, sync_token, secret_store_key } =
-        serde_json::from_str(&serialized_session)?;
+    let FullSession { client_session, user_session, sync_token, secret_store_key } = toml::from_str(&serialized_session)?;
 
     // Build the client with the previous settings from the session.
     let client = Client::builder()
@@ -165,8 +149,7 @@ async fn login(data_dir: &Path, session_file: &Path) -> anyhow::Result<(Client, 
     // storing secrets securely, it should be used instead.
     // Note that we could also build the user session from the login response.
     let user_session = matrix_auth.session().expect("A logged-in client should have a session");
-    let serialized_session =
-        serde_json::to_string(&FullSession { client_session, user_session, sync_token: None , secret_store_key: secret_store_key.clone() })?;
+    let serialized_session = toml::to_string(&FullSession { client_session, user_session, sync_token: None , secret_store_key: secret_store_key.clone() })?;
     fs::write(session_file, serialized_session).await?;
 
     println!("Session persisted in {}", session_file.to_string_lossy());
@@ -202,6 +185,7 @@ async fn build_client(data_dir: &Path) -> anyhow::Result<(Client, ClientSession)
         print!("Homeserver URL: ");
         io::stdout().flush().expect("Unable to write to stdout");
         io::stdin().read_line(&mut homeserver).expect("Unable to read user input");
+        homeserver = homeserver.trim().to_owned();
 
         println!("\nChecking homeserver…");
 
@@ -300,10 +284,10 @@ async fn sync(
 /// the sync token from the store.
 async fn persist_sync_token(session_file: &Path, sync_token: String) -> anyhow::Result<()> {
     let serialized_session = fs::read_to_string(session_file).await?;
-    let mut full_session: FullSession = serde_json::from_str(&serialized_session)?;
+    let mut full_session: FullSession = toml::from_str(&serialized_session)?;
 
     full_session.sync_token = Some(sync_token);
-    let serialized_session = serde_json::to_string(&full_session)?;
+    let serialized_session = toml::to_string(&full_session)?;
     fs::write(session_file, serialized_session).await?;
 
     Ok(())
@@ -359,10 +343,9 @@ async fn on_room_message(event: OriginalSyncRoomMessageEvent, room: Room) {
         Ok(room_name) => room_name.to_string(),
         Err(error) => {
             println!("Error getting room display name: {error}");
-            // Let's fallback to the room ID.
-            room.room_id().to_string()
+            "No room name".to_string()
         }
     };
 
-    println!("[{room_name}] {}: {}", event.sender, text_content.body)
+    println!("[{} {room_name}] {}: {}", room.room_id().to_string(), event.sender, text_content.body)
 }

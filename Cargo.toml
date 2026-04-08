@@ -10,11 +10,11 @@ name = "matrix-burn-bot"
 
 [dependencies]
 matrix-sdk = ">=0.16.0, <1.0.0"
+toml = "<=1.1.2, <2.0.0"
 anyhow = ">=1.0.102, <2.0.0"
 dirs = ">=6.0.0, <7.0.0"
 rand = ">=0.10.0, <1.0.0"
 serde = ">= 1.0.228, <2.0.0"
-serde_json = ">= 1.0.149, <2.0.0"
 tokio = { version = ">= 1.51.0, <2.0.0", features = ["macros", "rt-multi-thread"] }
 tracing-subscriber = "<= 0.3.23, <1.0.0"
 clap = { version = ">= 4.6.0, <5.0.0", features = ["derive"] }
