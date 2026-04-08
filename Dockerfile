@@ -3,7 +3,7 @@ WORKDIR /app
 COPY . .
 RUN cargo build --release
 
-FROM rust:1-slim-trixie
+FROM debian:trixie-slim
 
 COPY --from=builder /app/target/release/matrix-burn-bot /app/matrix-burn-bot
 WORKDIR /app
