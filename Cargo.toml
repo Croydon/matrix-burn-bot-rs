@@ -2,9 +2,11 @@
 name = "matrix-burn-bot"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
 authors = ["Michael Keck <git@cr0ydon.com>"]
 
 [[bin]]
 name = "matrix-burn-bot"
 
 [dependencies]
+matrix-sdk= ">=0.16.0"
