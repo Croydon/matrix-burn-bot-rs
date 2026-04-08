@@ -15,6 +15,7 @@ This bot is inspired by [this burn bot](https://github.com/syncpoint/burn-bot) w
 ## Resources
 
   * https://github.com/matrix-org/matrix-spec-proposals/pull/4140
+  * https://matrix-org.github.io/synapse/v1.98/message_retention_policies.html (spec proposal only, experimental, depending on homeserver and homeserver configuration)
   * https://github.com/element-hq/element-meta/discussions/712
   * https://github.com/element-hq/element-meta/discussions/682
 
