@@ -1,0 +1,16 @@
+{
+    "name": "matrix-burn-bot-rs-devcontainer",
+    "image": "mcr.microsoft.com/devcontainers/rust:2-1-trixie",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "rust-lang.rust-analyzer"
+            ],
+            "settings": {
+                "files.watcherExclude": {
+                    "**/target/**": true
+                }
+            }
+        }
+    }
+}
