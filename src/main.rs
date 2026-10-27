@@ -1,6 +1,7 @@
 use std::{
     io::{self, Write},
     path::{Path, PathBuf},
+    time::{Duration, SystemTime},
 };
 
 use matrix_sdk::{
@@ -8,9 +9,11 @@ use matrix_sdk::{
     authentication::matrix::MatrixSession,
     config::SyncSettings,
     encryption::{backups::BackupState, secret_storage::SecretStore},
+    room::MessagesOptions,
     ruma::{
         api::client::filter::FilterDefinition,
-        events::room::message::{MessageType, OriginalSyncRoomMessageEvent},
+        events::{AnySyncTimelineEvent, room::message::{MessageType, OriginalSyncRoomMessageEvent}},
+        RoomAliasId, RoomId,
     },
 };
 use rand::{RngExt, distr::Alphanumeric, rng};
@@ -28,7 +31,7 @@ struct ClientSession {
 }
 
 /// A room and the amount of time messages should remain in it.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct RoomConfig {
     address: String,
     burn_after_seconds: u64,
@@ -72,6 +75,7 @@ async fn main() -> anyhow::Result<()> {
         let (client, secret_store_key) = login(&data_dir, &session_file).await?;
         (client, secret_store_key, None)
     };
+    let room_configs = load_room_configs(&session_file).await?;
 
     let secret_store = client.encryption().secret_storage().open_secret_store(&secret_store_key).await?;
 
@@ -82,7 +86,19 @@ async fn main() -> anyhow::Result<()> {
 
     import_known_secrets(&client, secret_store).await?;
 
+    let _cleanup_task = tokio::spawn({
+        let client = client.clone();
+        async move { cleanup_loop(client, room_configs).await }
+    });
+
     sync(client, sync_token, &session_file).await
+}
+
+async fn load_room_configs(session_file: &Path) -> anyhow::Result<Vec<RoomConfig>> {
+    let serialized_session = fs::read_to_string(session_file).await?;
+    let full_session: FullSession = toml::from_str(&serialized_session)?;
+
+    Ok(full_session.rooms)
 }
 
 /// Restore a previous session.
@@ -341,6 +357,94 @@ async fn listen_for_backup_state_changes(client: Client) {
             BackupState::Disabling => println!("Disabling the backup"),
             BackupState::Creating => println!("Trying to create a new backup"),
         }
+    }
+}
+
+async fn cleanup_loop(client: Client, room_configs: Vec<RoomConfig>) {
+    let mut interval = tokio::time::interval(Duration::from_secs(600));
+    interval.tick().await;
+
+    loop {
+        interval.tick().await;
+
+        for room_config in &room_configs {
+            let Some(room) = configured_room(&client, &room_config.address).await else {
+                continue;
+            };
+
+            if room.state() != RoomState::Joined {
+                continue;
+            }
+
+            cleanup_room(&room, room_config.burn_after_seconds).await;
+        }
+    }
+}
+
+async fn configured_room(client: &Client, address: &str) -> Option<Room> {
+    if let Ok(room_id) = RoomId::parse(address) {
+        return client.get_room(&room_id);
+    }
+
+    let alias = RoomAliasId::parse(address).ok()?;
+    let room_id = client.resolve_room_alias(&alias).await.ok()?.room_id;
+
+    client.get_room(&room_id)
+}
+
+async fn cleanup_room(room: &Room, burn_after_seconds: u64) {
+    let burn_after = Duration::from_secs(burn_after_seconds);
+    let mut from = None;
+
+    loop {
+        let mut options = MessagesOptions::backward();
+        options.from = from.clone();
+        options.limit = 100u32.into();
+
+        let messages = match room.messages(options).await {
+            Ok(messages) => messages,
+            Err(_) => return,
+        };
+
+        for event in messages.chunk {
+            cleanup_event(room, event, burn_after).await;
+        }
+
+        let Some(next_from) = messages.end else { break };
+        if from.as_deref() == Some(next_from.as_str()) {
+            break;
+        }
+        from = Some(next_from);
+    }
+}
+
+async fn cleanup_event(
+    room: &Room,
+    event: matrix_sdk::deserialized_responses::TimelineEvent,
+    burn_after: Duration,
+) {
+    let Some(timestamp) = event.timestamp else { return };
+    let Some(timestamp) = timestamp.to_system_time() else { return };
+    let Ok(age) = SystemTime::now().duration_since(timestamp) else { return };
+    if age < burn_after {
+        return;
+    }
+
+    let Ok(AnySyncTimelineEvent::MessageLike(message_like)) = event.kind.raw().deserialize() else {
+        return;
+    };
+    if message_like.is_redacted() || message_like.event_type().to_string() == "m.room.redaction" {
+        return;
+    }
+
+    let event_id = message_like.event_id();
+    if room.redact(event_id, Some("Message expired"), None).await.is_ok() {
+        println!(
+            "got deleted event {} from room {} because it was {} seconds old",
+            event_id,
+            room.room_id(),
+            age.as_secs(),
+        );
     }
 }
 
