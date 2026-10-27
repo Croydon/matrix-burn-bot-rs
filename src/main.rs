@@ -64,7 +64,9 @@ struct FullSession {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_max_level(tracing_subscriber::filter::LevelFilter::WARN)
+        .init();
 
     let data_dir = std::env::var_os("PWD").map(PathBuf::from).expect("can't read the current working directory").join("matrix-burn-bot-rs-appdata");
     let session_file = data_dir.join("config.toml");
