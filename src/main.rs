@@ -438,7 +438,12 @@ async fn cleanup_event(
     }
 
     let event_id = message_like.event_id();
-    if room.redact(event_id, Some("Message expired"), None).await.is_ok() {
+    let reason = format!(
+        "Message expired because it is {} seconds old (limit: {})",
+        age.as_secs(),
+        burn_after.as_secs(),
+    );
+    if room.redact(event_id, Some(&reason), None).await.is_ok() {
         println!(
             "got deleted event {} from room {} because it was {} seconds old",
             event_id,
