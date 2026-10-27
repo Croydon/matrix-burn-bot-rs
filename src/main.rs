@@ -12,7 +12,7 @@ use matrix_sdk::{
     room::MessagesOptions,
     ruma::{
         api::client::filter::FilterDefinition,
-        events::{AnySyncTimelineEvent, room::message::{MessageType, OriginalSyncRoomMessageEvent}},
+        events::{AnySyncTimelineEvent, room::message::OriginalSyncRoomMessageEvent},
         RoomAliasId, RoomId,
     },
 };
@@ -459,7 +459,7 @@ async fn on_room_message(event: OriginalSyncRoomMessageEvent, room: Room) {
     if room.state() != RoomState::Joined {
         return;
     }
-    let MessageType::Text(text_content) = &event.content.msgtype else { return };
+    // let MessageType::Text(text_content) = &event.content.msgtype else { return };
 
     let room_name = match room.display_name().await {
         Ok(room_name) => room_name.to_string(),
@@ -472,7 +472,6 @@ async fn on_room_message(event: OriginalSyncRoomMessageEvent, room: Room) {
     let ts = event.origin_server_ts; // ruma::Timestamp (ms since unix epoch)
     let system_time = ts.to_system_time(); // std::time::SystemTime
 
-    println!("event time: {:?}", system_time);
-    println!("[{} {room_name}] {}: {}", room.room_id().to_string(), event.sender, text_content.body)
+    println!("Got a new message in room {} [{}], event time: {:?}", room_name, room.room_id(), system_time);
 
 }
