@@ -27,6 +27,13 @@ struct ClientSession {
     passphrase: String,
 }
 
+/// A room and the amount of time messages should remain in it.
+#[derive(Debug, Serialize, Deserialize)]
+struct RoomConfig {
+    address: String,
+    burn_after_seconds: u64,
+}
+
 /// The full session to persist.
 #[derive(Debug, Serialize, Deserialize)]
 struct FullSession {
@@ -46,6 +53,10 @@ struct FullSession {
 
     /// The secret storage key, this key will be used to open the secret-store.
     secret_store_key: String,
+
+    /// Rooms configured for message burning.
+    #[serde(default)]
+    rooms: Vec<RoomConfig>,
 }
 
 #[tokio::main]
@@ -80,7 +91,7 @@ async fn restore_session(session_file: &Path) -> anyhow::Result<(Client, String,
 
     // The session was serialized as TOML in a file.
     let serialized_session = fs::read_to_string(session_file).await?;
-    let FullSession { client_session, user_session, sync_token, secret_store_key } = toml::from_str(&serialized_session)?;
+    let FullSession { client_session, user_session, sync_token, secret_store_key, .. } = toml::from_str(&serialized_session)?;
 
     // Build the client with the previous settings from the session.
     let client = Client::builder()
@@ -145,7 +156,13 @@ async fn login(data_dir: &Path, session_file: &Path) -> anyhow::Result<(Client, 
     // storing secrets securely, it should be used instead.
     // Note that we could also build the user session from the login response.
     let user_session = matrix_auth.session().expect("A logged-in client should have a session");
-    let serialized_session = toml::to_string(&FullSession { client_session, user_session, sync_token: None , secret_store_key: secret_store_key.clone() })?;
+    let serialized_session = toml::to_string(&FullSession {
+        client_session,
+        user_session,
+        sync_token: None,
+        secret_store_key: secret_store_key.clone(),
+        rooms: Vec::new(),
+    })?;
     fs::write(session_file, serialized_session).await?;
 
     println!("Session persisted in {}", session_file.to_string_lossy());
