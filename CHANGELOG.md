@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.0 - 2026-10-28
+
+  * CI: Fix release publishing for multi-architecture container tags
+
 ## v0.1.1 - 2026-10-28
 
   * CI: Fix release publishing
