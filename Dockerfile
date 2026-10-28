@@ -7,5 +7,4 @@ FROM debian:trixie-slim
 
 COPY --from=builder /app/target/release/matrix-burn-bot /app/matrix-burn-bot
 WORKDIR /
-RUN mkdir /app/matrix-burn-bot-rs-appdata
 CMD ["./matrix-burn-bot"]

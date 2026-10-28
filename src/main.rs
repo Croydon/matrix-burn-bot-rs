@@ -69,6 +69,9 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let data_dir = std::env::var_os("PWD").map(PathBuf::from).expect("can't read the current working directory").join("matrix-burn-bot-rs-appdata");
+    if !data_dir.exists() {
+        fs::create_dir_all(&data_dir).await?;
+    }
     let session_file = data_dir.join("config.toml");
 
     let (client, secret_store_key, sync_token) = if session_file.exists() {
