@@ -68,7 +68,7 @@ async fn main() -> anyhow::Result<()> {
         .with_max_level(tracing_subscriber::filter::LevelFilter::WARN)
         .init();
 
-    let data_dir = std::env::var_os("PWD").map(PathBuf::from).expect("can't read the current working directory").join("matrix-burn-bot-rs-appdata");
+    let data_dir = std::env::current_dir()?.join("matrix-burn-bot-rs-appdata");
     if !data_dir.exists() {
         fs::create_dir_all(&data_dir).await?;
     }

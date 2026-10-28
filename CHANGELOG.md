@@ -3,6 +3,7 @@
 ## v0.3.0 - 2026-10-28
 
   * Container: Fix Entrypoint and Workdir
+  * Fix: get the working directory more reliable
 
 ## v0.2.0 - 2026-10-28
 
