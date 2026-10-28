@@ -1,6 +1,6 @@
 # Matrix Burn Bot
 
-This bot automatically deletes all user messages within a specific Matrix room after a specific time.  
+This bot automatically deletes all user messages within specific Matrix rooms after a specific time.  
 The user that is configured for this bot needs to have the right to delete messages or it will fail.  
 
 The Matrix spec and ecosystem has curently no native way for self-disappearing messages.  
