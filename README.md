@@ -9,7 +9,11 @@ However, there is on-going work around bringing this feature to Matrix, which we
 
 The bot is written in Rust and uses the official matrix-rust-sdk for handling everthing essential.  
 
-This bot is inspired by [this burn bot](https://github.com/syncpoint/burn-bot) written in JavaScript. I have used this bot myself for some time, but it is not actively maintained anymore and has one huge disadvantage: The bot session can not be verified. So the account that is used for the bot causes a "not trusted" warning in Matrix clients and will probably stop working altogether in encrypted rooms when Matrix stops sending encrypted messages to unverified sessions.
+This bot is inspired by [this burn bot](https://github.com/syncpoint/burn-bot) written in JavaScript.
+I have used this bot myself for some time, but it is not actively maintained anymore
+and had one huge disadvantage: The bot session can not be verified.
+So the account that is used for the bot caused a "not trusted" warning in Matrix clients. 
+The bot eventually stopped working entirely due to incompatibilities.
 
 
 ## Resources
