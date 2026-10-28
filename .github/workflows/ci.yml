@@ -2,6 +2,10 @@ name: "Burn Bot"
 
 on:
   push:
+      tags:
+        - '*'
+      branches:
+        - '*'
   pull_request:
 
 env:
