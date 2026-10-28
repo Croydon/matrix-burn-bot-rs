@@ -6,5 +6,5 @@ RUN cargo build --release
 FROM debian:trixie-slim
 
 COPY --from=builder /app/target/release/matrix-burn-bot /app/matrix-burn-bot
-WORKDIR /
-CMD ["./matrix-burn-bot"]
+WORKDIR /app
+ENTRYPOINT ["./matrix-burn-bot"]
