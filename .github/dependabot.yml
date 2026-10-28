@@ -5,3 +5,8 @@ updates:
     target-branch: dev
     schedule:
       interval: daily
+    groups:
+      security-updates:
+        applies-to: security-updates
+        patterns:
+          - "*"
