@@ -29,12 +29,21 @@ jobs:
       - name: "Docker: Set up Docker Buildx"
         uses: docker/setup-buildx-action@v4
 
-      - name: "Docker: Build (no push)"
+      - name: "Docker: Build AMD64 (no push)"
         uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
+          push: false
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev
+
+      - name: "Docker: Build ARM64 (no push)"
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/arm64
           push: false
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev
 
