@@ -1,5 +1,10 @@
 # Changelog
 
+
+## v0.3.1 - 2026-10-28
+
+  * Container: Install certificates
+
 ## v0.3.0 - 2026-10-28
 
   * Container: Fix Entrypoint and Workdir
