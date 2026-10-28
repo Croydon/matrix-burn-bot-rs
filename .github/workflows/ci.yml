@@ -2,191 +2,81 @@ name: "Burn Bot"
 
 on:
   push:
-      tags:
-        - '*'
-      branches:
-        - '*'
+    tags:
+      - '*'
+    branches:
+      - '*'
   pull_request:
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: croydon/matrix-burn-bot-rs
 
 jobs:
-  test-amd:
-    name: "Build AMD64"
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout the repo
-        uses: actions/checkout@v7
-
-      - name: Install Rust
-        uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
-
-      - name: Build
-        run: |
-          cargo build --release
-
-      - name: "Docker: Set up Docker Buildx"
-        uses: docker/setup-buildx-action@v4
-
-      - name: "Docker: Build AMD64 (no push)"
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/amd64
-          push: false
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev
-
-  test-arm:        
-    name: "Build ARM64"
-    runs-on: ubuntu-26.04-arm
-    steps:
-      - name: Checkout the repo
-        uses: actions/checkout@v7
-
-      - name: Install Rust
-        uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
-
-      - name: Build
-        run: |
-          cargo build --release
-
-      - name: "Docker: Set up Docker Buildx"
-        uses: docker/setup-buildx-action@v4
-
-      - name: "Docker: Build ARM64 (no push)"
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/arm64
-          push: false
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev
-
-  build_and_deploy_amd:
-    name: "Build and Deploy AMD64"
-    needs:
-      - test-amd
-      - test-arm
-    runs-on: ubuntu-latest
+  build:
+    name: "Build (no push)"
+    uses: docker/github-builder/.github/workflows/build.yml@v1.18.1
     permissions:
-      id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
-      contents: write  # Docs
-      packages: write  # Container push
+      contents: read
+      id-token: write
+    with:
+      context: .
+      file: ./Dockerfile
+      output: image
+      push: false
+      platforms: linux/amd64,linux/arm64
+      distribute: true
+      fail-fast: true
+      meta-images: ghcr.io/croydon/matrix-burn-bot-rs
+      meta-tags: |
+        type=raw,value=ci-test
 
-    steps:
-      - name: Checkout the repo
-        uses: actions/checkout@v7
-
-      - name: Install Rust
-        uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
-
-      - name: Build
-        run: |
-          cargo build --release
-
-      - name: "Docker: Set up Docker Buildx"
-        uses: docker/setup-buildx-action@v4
-
-      - name: "Docker: Log in to GHCR"
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ env.REGISTRY }}
+  build_and_deploy_dev:
+    name: "Build and Deploy (:dev)"
+    needs: build
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
+    uses: docker/github-builder/.github/workflows/build.yml@v1.18.1
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+    with:
+      context: .
+      file: ./Dockerfile
+      output: image
+      push: true
+      platforms: linux/amd64,linux/arm64
+      distribute: true
+      fail-fast: true
+      meta-images: ghcr.io/croydon/matrix-burn-bot-rs
+      meta-tags: |
+        type=raw,value=dev
+    secrets:
+      registry-auths: |
+        - registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: "Docker: Extract metadata (tags, labels)"
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=tag
-            type=raw,value=latest
-
-      - name: "Docker: Build & Push (:dev)"
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev
-          labels: ${{ steps.meta.outputs.labels }}
-
-      - name: "Docker: Build & Push"
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-
-  build_and_deploy_arm:
-    name: "Build and Deploy ARM64"
-    needs:
-      - test-amd
-      - test-arm
-    runs-on: ubuntu-26.04-arm
+  build_and_deploy_release:
+    name: "Build and Deploy (release)"
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
+    uses: docker/github-builder/.github/workflows/build.yml@v1.18.1
     permissions:
-      id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
-      contents: write  # Docs
-      packages: write  # Container push
-
-    steps:
-      - name: Checkout the repo
-        uses: actions/checkout@v7
-
-      - name: Install Rust
-        uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
-
-      - name: Build
-        run: |
-          cargo build --release
-
-      - name: "Docker: Set up Docker Buildx"
-        uses: docker/setup-buildx-action@v4
-
-      - name: "Docker: Log in to GHCR"
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ env.REGISTRY }}
+      contents: read
+      id-token: write
+      packages: write
+    with:
+      context: .
+      file: ./Dockerfile
+      output: image
+      push: true
+      platforms: linux/amd64,linux/arm64
+      distribute: true
+      fail-fast: true
+      meta-images: ghcr.io/croydon/matrix-burn-bot-rs
+      meta-tags: |
+        type=ref,event=tag
+        type=raw,value=latest
+    secrets:
+      registry-auths: |
+        - registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: "Docker: Extract metadata (tags, labels)"
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=tag
-            type=raw,value=latest
-
-      - name: "Docker: Build & Push (:dev)"
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/arm64
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev
-          labels: ${{ steps.meta.outputs.labels }}
-
-      - name: "Docker: Build & Push"
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
