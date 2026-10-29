@@ -491,7 +491,7 @@ async fn cleanup_event(
     );
     if room.redact(event_id, Some(&reason), None).await.is_ok() {
         println!(
-            "got deleted event {} from room {} because it was {} seconds old",
+            "Deleted event {} from room {} because it was {} seconds old",
             event_id,
             room.room_id(),
             age.as_secs(),
