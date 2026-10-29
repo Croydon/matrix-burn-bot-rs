@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.0 - 2026-10-29
+
+  * Allow init via JSON file (e.g. the way Home Assistant is putting app options inside the container)
 
 ## v0.3.1 - 2026-10-28
 

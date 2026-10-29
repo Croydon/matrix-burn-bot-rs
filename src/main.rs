@@ -1,5 +1,6 @@
 use std::{
     io::{self, Write},
+    io::ErrorKind,
     path::{Path, PathBuf},
     time::{Duration, SystemTime},
 };
@@ -28,6 +29,18 @@ struct ClientSession {
     db_path: PathBuf,
     /// The passphrase of the database.
     passphrase: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct StartupOptions {
+    #[serde(rename = "HOMESERVER_URL")]
+    homeserver_url: String,
+    #[serde(rename = "USER_ID")]
+    user_id: String,
+    #[serde(rename = "PASSWORD")]
+    password: String,
+    #[serde(rename = "KEY_BACKUP_PASSPHRASE")]
+    key_backup_passphrase: String,
 }
 
 /// A room and the amount of time messages should remain in it.
@@ -77,7 +90,8 @@ async fn main() -> anyhow::Result<()> {
     let (client, secret_store_key, sync_token) = if session_file.exists() {
         restore_session(&session_file).await?
     } else {
-        let (client, secret_store_key) = login(&data_dir, &session_file).await?;
+        let options = load_startup_options().await?;
+        let (client, secret_store_key) = login(&data_dir, &session_file, options.as_ref()).await?;
         (client, secret_store_key, None)
     };
     let room_configs = load_room_configs(&session_file).await?;
@@ -97,6 +111,14 @@ async fn main() -> anyhow::Result<()> {
     });
 
     sync(client, sync_token, &session_file).await
+}
+
+async fn load_startup_options() -> anyhow::Result<Option<StartupOptions>> {
+    match fs::read_to_string("/data/options.json").await {
+        Ok(serialized_options) => Ok(Some(serde_json::from_str(&serialized_options)?)),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error.into()),
+    }
 }
 
 async fn load_room_configs(session_file: &Path) -> anyhow::Result<Vec<RoomConfig>> {
@@ -130,32 +152,41 @@ async fn restore_session(session_file: &Path) -> anyhow::Result<(Client, String,
 }
 
 /// Login with a new device.
-async fn login(data_dir: &Path, session_file: &Path) -> anyhow::Result<(Client, String)> {
+async fn login(
+    data_dir: &Path,
+    session_file: &Path,
+    options: Option<&StartupOptions>,
+) -> anyhow::Result<(Client, String)> {
     println!("No previous session found, logging in…");
 
-    let (client, client_session) = build_client(data_dir).await?;
+    let (client, client_session) = build_client(data_dir, options).await?;
     let matrix_auth = client.matrix_auth();
-    let mut secret_store_key = String::new();
-
-    loop {
+    let (username, password, secret_store_key) = if let Some(options) = options {
+        (
+            options.user_id.clone(),
+            options.password.clone(),
+            options.key_backup_passphrase.clone(),
+        )
+    } else {
         print!("\nUsername: ");
         io::stdout().flush().expect("Unable to write to stdout");
         let mut username = String::new();
         io::stdin().read_line(&mut username).expect("Unable to read user input");
-        username = username.trim().to_owned();
 
         print!("Password: ");
         io::stdout().flush().expect("Unable to write to stdout");
         let mut password = String::new();
         io::stdin().read_line(&mut password).expect("Unable to read user input");
-        password = password.trim().to_owned();
 
         print!("Key Backup Passphrase: ");
         io::stdout().flush().expect("Unable to write to stdout");
-        secret_store_key.clear();
+        let mut secret_store_key = String::new();
         io::stdin().read_line(&mut secret_store_key).expect("Unable to read user input");
-        secret_store_key = secret_store_key.trim().to_owned();
 
+        (username.trim().to_owned(), password.trim().to_owned(), secret_store_key.trim().to_owned())
+    };
+
+    loop {
         match matrix_auth
             .login_username(&username, &password)
             .initial_device_display_name("matrix-burn-bot-rs")
@@ -166,6 +197,9 @@ async fn login(data_dir: &Path, session_file: &Path) -> anyhow::Result<(Client, 
                 break;
             }
             Err(error) => {
+                if options.is_some() {
+                    return Err(error.into());
+                }
                 println!("Error logging in: {error}");
                 println!("Please try again\n");
             }
@@ -198,7 +232,10 @@ async fn login(data_dir: &Path, session_file: &Path) -> anyhow::Result<(Client, 
 }
 
 /// Build a new client.
-async fn build_client(data_dir: &Path) -> anyhow::Result<(Client, ClientSession)> {
+async fn build_client(
+    data_dir: &Path,
+    options: Option<&StartupOptions>,
+) -> anyhow::Result<(Client, ClientSession)> {
     let mut rng = rng();
 
     // Generating a subfolder for the database is not mandatory, but it is useful if
@@ -214,12 +251,15 @@ async fn build_client(data_dir: &Path) -> anyhow::Result<(Client, ClientSession)
 
     // We create a loop here so the user can retry if an error happens.
     loop {
-        let mut homeserver = String::new();
-
-        print!("Homeserver URL: ");
-        io::stdout().flush().expect("Unable to write to stdout");
-        io::stdin().read_line(&mut homeserver).expect("Unable to read user input");
-        homeserver = homeserver.trim().to_owned();
+        let homeserver = if let Some(options) = options {
+            options.homeserver_url.clone()
+        } else {
+            let mut homeserver = String::new();
+            print!("Homeserver URL: ");
+            io::stdout().flush().expect("Unable to write to stdout");
+            io::stdin().read_line(&mut homeserver).expect("Unable to read user input");
+            homeserver.trim().to_owned()
+        };
 
         println!("\nChecking homeserver…");
 
@@ -233,6 +273,7 @@ async fn build_client(data_dir: &Path) -> anyhow::Result<(Client, ClientSession)
             .await
         {
             Ok(client) => return Ok((client, ClientSession { homeserver, db_path, passphrase})),
+            Err(error) if options.is_some() => return Err(error.into()),
             Err(error) => match &error {
                 matrix_sdk::ClientBuildError::AutoDiscovery(_)
                 | matrix_sdk::ClientBuildError::Url(_)
